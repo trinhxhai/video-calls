@@ -11,6 +11,9 @@ import { useAuth } from "../Context/AuthContext";
 const servers = {
   iceServers: [
     {
+      urls: ["stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"],
+    },
+    {
       urls: "turn:turn.sondc.dev",
       username: "test",
       credential: "test123",
@@ -18,8 +21,8 @@ const servers = {
   ],
 };
 
-// const host = "https://morning-bastion-27437.herokuapp.com/";
-const host = "http://localhost:3000/";
+const host = "https://morning-bastion-27437.herokuapp.com/";
+// const host = "http://localhost:3000/";
 
 function Room() {
   const params = useParams();
