@@ -41,8 +41,10 @@ function Room() {
   const [remoteStream, setRemoteStream] = useState(null);
 
   console.log("render", { localVideo, remoteVideo, localStream, remoteStream });
+  console.log("render", { isRoomOwner });
 
   useEffect(() => {
+    socketRef.current = socketIOClient.connect(host);
     console.log("empty UseEffect");
 
     const docRef = doc(db, "rooms", roomKey);
@@ -55,6 +57,8 @@ function Room() {
         // check current user is owner of room
         isOwner = docData?.createrUid === currentUser.uid;
         setIsRoomOwner(isOwner);
+        console.log("setIsRoomOwner", { isOwner, isRoomOwner });
+        console.log("after setIsRoomOwner");
 
         navigator.mediaDevices
           .getUserMedia({
@@ -81,75 +85,34 @@ function Room() {
               roomKey,
               isOwner,
             });
-          });
 
-        setUpSocket(isOwner);
+            console.log("useEfect1 trigger setUpSocket when", {
+              isRoomOwner,
+              localStream,
+              remoteStream,
+            });
+            setUpSocket(isOwner, lcStream, rmtStream);
+          });
       } else {
         alert("Phòng không tồn tại");
       }
     });
-  }, []);
-
-  useEffect(() => {
-    console.log("useEffect2", { localVideo, remoteVideo });
-    if (localVideo === null || remoteVideo === null) {
-      return;
-    }
-
-    socketRef.current = socketIOClient.connect(host);
-    navigator.mediaDevices
-      .getUserMedia({
-        video: true,
-        audio: true,
-      })
-      .then((resp) => {
-        console.log("empty useEffect2 navigator getmedia");
-        const lcStream = resp;
-        setLocalStream(lcStream);
-        const rmtStream = new MediaStream();
-        setRemoteStream(rmtStream);
-        localVideo.current.srcObject = lcStream;
-        remoteVideo.current.srcObject = rmtStream;
-
-        console.log("afterset", {
-          localVideo,
-          remoteVideo,
-          lcStream,
-          rmtStream,
-        });
-      });
-
     return () => {
       socketRef.current.disconnect();
     };
-  }, [localVideo, remoteVideo]);
+  }, []);
 
-  useEffect(() => {
-    if (localVideo === null) {
-      return;
-    }
-    if (localVideo.current.srcObject !== localStream) {
-      localVideo.current.srcObject = localStream;
-    }
-    if (remoteVideo === null) {
-      return;
-    }
-    if (remoteVideo.current.srcObject !== remoteStream) {
-      remoteVideo.current.srcObject = remoteStream;
-    }
-
-    setUpSocket(isRoomOwner);
-  }, [remoteStream, localStream]);
-
-  const setUpSocket = (isOwner) => {
+  const setUpSocket = (isOwner, lcStream, rmtStream) => {
     // this function can be called mutiple time, clear to prevent listen mutiple time
     socketRef.current.removeAllListeners();
 
+    console.log("setUpSocket when", { lcStream, rmtStream });
+
     // when 2 people in room, start recreate connection
     socketRef.current.on("ownerStart", (message) => {
-      console.log("ownerStart", isOwner);
+      console.log("ownerStart", { isOwner, lcStream, rmtStream });
       if (isOwner) {
-        setUpOwnerConnection().then((offer) => {
+        setUpOwnerConnection(lcStream, rmtStream).then((offer) => {
           // send offer to guest user
           console.log("ownerStart send", offer);
           socketRef.current.emit("upOffer", { isOwner, roomKey, offer });
@@ -167,21 +130,27 @@ function Room() {
         console.error("Offer cant be null!");
         return;
       }
-      if (isRoomOwner) {
+
+      remoteVideo.current.srcObject = rmtStream;
+
+      if (isOwner) {
+        console.log("OWNER SET setRemoteDescription", { offer });
         const answerDescription = new RTCSessionDescription(offer);
-        console.log("OWNER SET setRemoteDescription");
         pc.setRemoteDescription(answerDescription);
 
         socketRef.current.emit("getOtherCandidates", { isOwner, roomKey });
       } else {
-        setUpGuestConnection(offer).then((guestOffer) => {
+        setUpGuestConnection(offer, lcStream, rmtStream).then((guestOffer) => {
           console.log("GUEST upOffer", guestOffer);
           socketRef.current.emit("upOffer", {
             isOwner,
             roomKey,
             offer: guestOffer,
           });
-          socketRef.current.emit("getOtherCandidates", { isOwner, roomKey });
+          socketRef.current.emit("getOtherCandidates", {
+            isOwner,
+            roomKey,
+          });
         });
       }
     });
@@ -218,11 +187,15 @@ function Room() {
   };
 
   // Recreate PeerToPeer Connection for Owner User
-  const setUpOwnerConnection = async () => {
-    if (localStream === null || remoteStream === null) {
+  const setUpOwnerConnection = async (lcStream, rmtStream) => {
+    if (lcStream === null || rmtStream === null) {
+      console.log("setUpOwnerConnection local | remote stream null", {
+        lcStream,
+        rmtStream,
+      });
       return;
     }
-    console.log("setUpOwnerConnection", { localStream, remoteStream });
+    console.log("setUpOwnerConnection", { lcStream, rmtStream });
 
     // const rmStream = new MediaStream();
     // setRemoteStream(rmStream);
@@ -230,14 +203,21 @@ function Room() {
     pc = new RTCPeerConnection(servers);
 
     // Push tracks from local stream to peer connection
-    localStream.getTracks().forEach((track) => {
-      pc.addTrack(track, localStream);
+    lcStream.getTracks().forEach((track) => {
+      console.log("stream onwer: local -> pc[guest]", track);
+      pc.addTrack(track, lcStream);
+    });
+
+    // remove old track
+    rmtStream.getTracks().forEach((track) => {
+      rmtStream.removeTrack(track);
     });
 
     // Pull tracks from remote stream, add to video stream
     pc.ontrack = (event) => {
       event.streams[0].getTracks().forEach((track) => {
-        remoteStream.addTrack(track);
+        console.log("stream onwer: [guest]pc -> remote", track);
+        rmtStream.addTrack(track);
       });
     };
 
@@ -247,7 +227,6 @@ function Room() {
       if (event.candidate) {
         socketRef.current.emit("updateCandidate", {
           roomKey,
-          isRoomOwner,
           candidate: event.candidate.toJSON(),
         });
       }
@@ -266,30 +245,25 @@ function Room() {
   };
 
   // Recreate PeerToPeer Connection for Guest User
-  const setUpGuestConnection = async (ownerOffer) => {
-    if (localStream === null || remoteStream === null) {
-      return;
-    }
-    console.log("setUpGuestConnection", {
-      ownerOffer,
-      localStream,
-      remoteStream,
-    });
-
-    // const rmStream = new MediaStream();
-    // setRemoteStream(rmStream);
-
+  const setUpGuestConnection = async (ownerOffer, lcStream, rmtStream) => {
     pc = new RTCPeerConnection(servers);
 
     // Push tracks from local stream to peer connection
-    localStream.getTracks().forEach((track) => {
-      pc.addTrack(track, localStream);
+    lcStream.getTracks().forEach((track) => {
+      console.log("stream guest: local -> pc[owner]", track);
+      pc.addTrack(track, lcStream);
     });
-
+    // remove old track
+    rmtStream.getTracks().forEach((track) => {
+      rmtStream.removeTrack(track);
+    });
     // Pull tracks from remote stream, add to video stream
     pc.ontrack = (event) => {
       event.streams[0].getTracks().forEach((track) => {
-        remoteStream.addTrack(track);
+        console.log("stream guest: pc[owner] -> remote", track);
+
+        console.log("rmtStream", rmtStream);
+        rmtStream.addTrack(track);
       });
     };
 
@@ -299,7 +273,6 @@ function Room() {
       if (event.candidate) {
         socketRef.current.emit("updateCandidate", {
           roomKey,
-          isRoomOwner,
           candidate: event.candidate.toJSON(),
         });
       }
