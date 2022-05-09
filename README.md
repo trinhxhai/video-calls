@@ -19,5 +19,6 @@ Socket.io:
 
 Client (netify):
 -  https://videocalls-txhai12.netlify.app/
+
 Server (heroku): 
 - https://morning-bastion-27437.herokuapp.com/
