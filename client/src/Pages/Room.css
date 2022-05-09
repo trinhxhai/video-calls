@@ -1,0 +1,62 @@
+.stream-container {
+  display: flex;
+  justify-content: center;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.chat-container {
+  height: 30rem;
+  width: 35rem;
+  margin-left: 1rem;
+  border: 1px solid black;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.messages-container {
+  border: 1px solic pink;
+  height: 87%;
+  width: 100%;
+}
+
+.controls-container {
+  /* border: 1px solid blue; */
+  height: 10%;
+  width: 100%;
+  display: flex;
+}
+.message-input {
+  width: 75%;
+}
+
+.controls-container .controls {
+  width: 24%;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+.controls-container .controls label {
+  width: 20%;
+}
+
+.message {
+  border: 4px solid black;
+  margin: 10px;
+  padding: 5px;
+  border-radius: 10px;
+}
+.message-sender {
+  border-bottom: 1px solid black;
+  margin-bottom: 5px;
+}
+.message-content {
+  padding: 10px;
+  padding-left: 10px;
+  border-bottom: 1px solid black;
+  margin-bottom: 5px;
+}
+.message-attachment a {
+  text-decoration: none;
+  font-style: italic;
+}
