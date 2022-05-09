@@ -10,10 +10,8 @@ Firebase:
 Socket.io:
 - Signaling.
 - Gửi tin nhắn, file.
+  - Không lưu lại, F5 lại sẽ xóa hết các tin nhắn và file đã nhận hoặc gửi.
 
-### Tiến độ
-- Hoàn thiện hầu hết các task.
-- Phần video call sẽ lỗi khi 2 user đã kết nối và một người dùng F5, hoặc tắt đi vào lại.
 
 ## Deploy
 
